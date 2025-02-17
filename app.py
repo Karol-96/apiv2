@@ -78,7 +78,8 @@ def get_db_connection():
         'SERVER=10.10.1.4;'
         'DATABASE=RAModule2;'
         'UID=karol_bhandari;'
-        'PWD=P@ssword7178!;'
+        'PWD=P@ssword7178!;',
+        'TrustServerCertificate=yes;'
     )
     return pyodbc.connect(conn_str)
 
