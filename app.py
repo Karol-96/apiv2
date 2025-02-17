@@ -77,8 +77,8 @@ def get_db_connection():
         'DRIVER={ODBC Driver 17 for SQL Server};'
         'SERVER=10.10.1.4;'
         'DATABASE=RAModule2;'
-        'UID=karol_bhandari;'
-        'PWD=P@ssword7178!;',
+        'UID=vijayvadher@healthtrixss.com;'
+        'PWD=Irn_admin@92614;',
         'TrustServerCertificate=yes;'
     )
     return pyodbc.connect(conn_str)
