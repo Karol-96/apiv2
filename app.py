@@ -75,12 +75,13 @@ def get_db_connection():
     """Establish a connection to the database."""
     conn_str = (
         'DRIVER={ODBC Driver 17 for SQL Server};'
-        f'SERVER={os.getenv("DB_SERVER")};'
-        f'DATABASE={os.getenv("DB_NAME")};'
-        f'UID={os.getenv("DB_USER")};'
-        f'PWD={os.getenv("DB_PASSWORD")};'
+        'SERVER=10.10.1.4;'
+        'DATABASE=RAModule2;'
+        'UID=karol_bhandari;'
+        'PWD=P@ssword7178!;'
     )
     return pyodbc.connect(conn_str)
+
 
 @contextmanager
 def get_db_cursor():
