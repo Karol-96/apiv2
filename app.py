@@ -72,14 +72,31 @@ class ProcessDataRequest(BaseModel):
     diagnoses: List[Diagnosis]
 
 def get_db_connection():
-    """Establish a connection to the database."""
-    conn_str = (
-        'DRIVER={ODBC Driver 17 for SQL Server};'
-        'SERVER=10.10.1.4;'
-        'DATABASE=RAModule2;'
-        'UID=KarolBhandari@healthtrixss.com;'
-    )
-    return pyodbc.connect(conn_str)
+    """Establish a connection to the database with all specified parameters."""
+    try:
+        conn_str = (
+            'DRIVER={ODBC Driver 17 for SQL Server};'
+            'SERVER=10.10.1.4;'                     # -S parameter
+            'DATABASE=RAModule2;'                   # -d parameter
+            'UID=karol_bhandari;'                   # -U parameter
+            'PWD=P@ssword7178!;'                   # -P parameter
+            'Trusted_Connection=no;'                # Disable Windows Authentication
+            'TrustServerCertificate=yes;'           # -C parameter
+            'Authentication=ActiveDirectoryIntegrated;'  # -G parameter
+            'Connection Timeout=30;'                # -l parameter
+            'Encrypt=yes;'                         # Enable encryption
+            'ApplicationIntent=ReadWrite'          # Specify application intent
+        )
+        
+        logger.info("Attempting database connection...")
+        conn = pyodbc.connect(conn_str, timeout=30)  # Set connection timeout
+        logger.info("Database connection successful")
+        return conn
+        
+    except pyodbc.Error as e:
+        logger.error(f"Database connection error: {str(e)}")
+        logger.error(f"Connection string used: {conn_str}")
+        raise
 
 
 @contextmanager
