@@ -75,7 +75,7 @@ def get_db_connection():
     """Establish a connection to the database with all specified parameters."""
     try:
         conn_str = (
-            'DRIVER={ODBC Driver 17 for SQL Server};'
+            'DRIVER={ODBC Driver 18 for SQL Server};'
             'SERVER=10.10.1.4;'                     # -S parameter
             'DATABASE=RAModule2;'                   # -d parameter
             'UID=karol_bhandari;'                   # -U parameter
