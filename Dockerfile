@@ -2,16 +2,17 @@ FROM python:3.11-slim
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    curl \
-    gnupg2 \
+    freetds-dev \
+    freetds-bin \
     unixodbc-dev \
+    tdsodbc \
     && rm -rf /var/lib/apt/lists/*
 
-# Install SQL Server ODBC Driver
-RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
-    && curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list \
-    && apt-get update \
-    && ACCEPT_EULA=Y apt-get install -y msodbcsql17
+# Configure FreeTDS
+RUN echo "[MSSQL]\n\
+host = 10.10.1.4\n\
+port = 1433\n\
+tds version = 7.4" > /etc/freetds.conf
 
 WORKDIR /app
 
@@ -20,6 +21,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-EXPOSE 443
+EXPOSE 8000
 
-CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "app:app", "--bind", "0.0.0.0:443", "--timeout", "600"]
+CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "app:app", "--bind", "0.0.0.0:8000", "--timeout", "120"]
