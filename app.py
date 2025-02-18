@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import json
-import pyodbc 
+import pymssql  # Changed from pyodbc to pymssql
 import logging
 import time
 from contextlib import contextmanager
@@ -72,32 +72,22 @@ class ProcessDataRequest(BaseModel):
     diagnoses: List[Diagnosis]
 
 def get_db_connection():
-    """Establish a connection to the database with all specified parameters."""
+    """Establish a connection to the database."""
     try:
-        conn_str = (
-            'DRIVER={ODBC Driver 18 for SQL Server};'
-            'SERVER=10.10.1.4;'                     # -S parameter
-            'DATABASE=RAModule2;'                   # -d parameter
-            'UID=KarolBhandari@healthtrixss.com;'                 # -U parameter
-            'PWD=P@ssword7178!;'                   # -P parameter
-            'Trusted_Connection=no;'                # Disable Windows Authentication
-            'TrustServerCertificate=yes;'           # -C parameter
-            'Authentication=ActiveDirectoryIntegrated;'  # -G parameter
-            'Connection Timeout=30;'                # -l parameter
-            'Encrypt=yes;'                         # Enable encryption
-            'ApplicationIntent=ReadWrite'          # Specify application intent
+        conn = pymssql.connect(
+            server='10.10.1.4',
+            database='RAModule2',
+            user='karol_bhandari',
+            password='P@ssword7178!',
+            port='1433',
+            charset='UTF-8',
+            timeout=30
         )
-        
-        logger.info("Attempting database connection...")
-        conn = pyodbc.connect(conn_str, timeout=30)  # Set connection timeout
         logger.info("Database connection successful")
         return conn
-        
-    except pyodbc.Error as e:
+    except pymssql.Error as e:
         logger.error(f"Database connection error: {str(e)}")
-        logger.error(f"Connection string used: {conn_str}")
         raise
-
 
 @contextmanager
 def get_db_cursor():
@@ -106,7 +96,7 @@ def get_db_cursor():
     cursor = None
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(as_dict=True)
         yield cursor
         conn.commit()
     except Exception as e:
@@ -181,14 +171,20 @@ def process_data_with_sp(cursor, payment_year, memberships, diagnoses):
         logger.info("Inserting membership data...")
         for i in tqdm(range(0, total_members, batch_size), desc="Processing members"):
             batch = df_members.iloc[i:i+batch_size]
-            values = ','.join([
-                f"('{row.MemberID}', '{row.BirthDate}', '{row.Gender}', '{row.RAType}', "
-                f"'{row.Hospice}', '{row.get('LTIMCAID', 'N')}', '{row.get('NEMCAID', 'N')}', "
-                f"'{row.OREC}')"
-                for _, row in batch.iterrows()
-            ])
-            if values:
-                cursor.execute(f"INSERT INTO #TempMembership VALUES {values}")
+            for _, row in batch.iterrows():
+                cursor.execute("""
+                    INSERT INTO #TempMembership 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    str(row.MemberID),
+                    str(row.BirthDate),
+                    str(row.Gender),
+                    str(row.RAType),
+                    str(row.Hospice),
+                    str(row.get('LTIMCAID', 'N')),
+                    str(row.get('NEMCAID', 'N')),
+                    str(row.OREC)
+                ))
  
         df_diag = pd.DataFrame(diagnoses)
         total_diag = len(df_diag)
@@ -196,18 +192,23 @@ def process_data_with_sp(cursor, payment_year, memberships, diagnoses):
         logger.info("Inserting diagnosis data...")
         for i in tqdm(range(0, total_diag, batch_size), desc="Processing diagnoses"):
             batch = df_diag.iloc[i:i+batch_size]
-            values = ','.join([
-                f"('{row.MemberID}', '{row.FromDOS}', '{row.ThruDOS}', '{row.DxCode}')"
-                for _, row in batch.iterrows()
-            ])
-            if values:
-                cursor.execute(f"INSERT INTO #TempDiagnosis VALUES {values}")
+            for _, row in batch.iterrows():
+                cursor.execute("""
+                    INSERT INTO #TempDiagnosis 
+                    VALUES (%s, %s, %s, %s)
+                """, (
+                    str(row.MemberID),
+                    str(row.FromDOS),
+                    str(row.ThruDOS),
+                    str(row.DxCode)
+                ))
  
         logger.info('Executing stored procedure...')
-        sql = """
-            DECLARE @PmtYear INT = ?;
+        cursor.execute("""
+            DECLARE @PmtYear INT = %s;
             DECLARE @Membership AS InputMembership_PartC;
             DECLARE @DxTable AS InputDiagnosis;
+            
             INSERT INTO @Membership (
                 MemberID, BirthDate, Gender, RAType, 
                 Hospice, LTIMCAID, NEMCAID, OREC
@@ -216,35 +217,15 @@ def process_data_with_sp(cursor, payment_year, memberships, diagnoses):
                 MemberID, BirthDate, Gender, RAType,
                 Hospice, LTIMCAID, NEMCAID, OREC
             FROM #TempMembership;
+            
             INSERT INTO @DxTable (MemberID, FromDOS, ThruDOS, DxCode)
             SELECT MemberID, FromDOS, ThruDOS, DxCode
             FROM #TempDiagnosis;
  
             EXEC dbo.sp_RS_Medicare_PartC_Outer @PmtYear, @Membership, @DxTable;
-        """
-        cursor.execute(sql, payment_year)
+        """, (payment_year,))
         
-        while cursor.description is None and cursor.nextset():
-            pass
-        if cursor.description is None:
-            return []
-        
-        columns = [column[0] for column in cursor.description]
-        results = []
-        for row in cursor.fetchall():
-            row_dict = {}
-            for i, value in enumerate(row):
-                column_name = columns[i]
-                if isinstance(value, decimal.Decimal):
-                    row_dict[column_name] = float(value)
-                elif isinstance(value, (datetime, date)):
-                    row_dict[column_name] = value.isoformat()
-                elif value is None:
-                    row_dict[column_name] = None
-                else:
-                    row_dict[column_name] = str(value)
-            results.append(row_dict)
-        
+        results = cursor.fetchall()
         logger.info(f"Retrieved {len(results)} records from stored procedure")
         return results
  
@@ -261,8 +242,8 @@ async def process_data(request: ProcessDataRequest):
     """API endpoint to handle data processing with caching."""
     try:
         logger.info(f"Processing data for {len(request.memberships)} members and {len(request.diagnoses)} diagnoses")
-        memberships_dict = [membership.dict() for membership in request.memberships]
-        diagnoses_dict = [diagnosis.dict() for diagnosis in request.diagnoses]
+        memberships_dict = [membership.model_dump() for membership in request.memberships]
+        diagnoses_dict = [diagnosis.model_dump() for diagnosis in request.diagnoses]
         memberships_tuple = tuple(tuple(sorted(m.items())) for m in memberships_dict)
         diagnoses_tuple = tuple(tuple(sorted(d.items())) for d in diagnoses_dict)
         
@@ -306,9 +287,11 @@ async def process_data(request: ProcessDataRequest):
                 'timestamp': datetime.now().isoformat()
             }
         )
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
 if __name__ == '__main__':
     import uvicorn
     port = int(os.getenv("PORT", 443))
