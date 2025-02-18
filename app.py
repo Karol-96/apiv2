@@ -78,7 +78,7 @@ def get_db_connection():
             'DRIVER={ODBC Driver 18 for SQL Server};'
             'SERVER=10.10.1.4;'                     # -S parameter
             'DATABASE=RAModule2;'                   # -d parameter
-            'UID=karol_bhandari;'                   # -U parameter
+            'UID=KarolBhandari@healthtrixss.com;'                 # -U parameter
             'PWD=P@ssword7178!;'                   # -P parameter
             'Trusted_Connection=no;'                # Disable Windows Authentication
             'TrustServerCertificate=yes;'           # -C parameter
